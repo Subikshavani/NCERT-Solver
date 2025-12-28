@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@100..900&display=swap');
+
+@theme {
+  --color-background: #050505;
+  --color-card: #0c0c0c;
+  --color-card-hover: #121212;
+  --color-accent: #6366f1;
+  --color-accent-soft: rgba(99, 102, 241, 0.1);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-text-main: #ffffff;
+  --color-text-dim: #888888;
+
+  --font-serif: "Playfair Display", serif;
+  --font-sans: "Inter", sans-serif;
+}
+
+:root {
+  --bg-color: #050505;
+  --text-main: #ffffff;
+  --text-dim: #888888;
+  --accent: #6366f1;
+  --accent-soft: rgba(99, 102, 241, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --card-bg: #0c0c0c;
+  --card-hover: #121212;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-text-main font-sans antialiased overflow-x-hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-serif font-normal tracking-tight;
+  }
+}
+
+@layer components {
+  .btn-premium {
+    @apply px-8 py-4 font-serif border border-white bg-transparent text-white transition-all duration-300 hover:bg-white hover:text-black disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .premium-card {
+    @apply bg-card/70 backdrop-blur-md border border-border p-8 transition-all duration-500 hover:bg-card-hover/80 hover:border-accent hover:-translate-y-2 hover:shadow-2xl hover:shadow-accent/10 relative overflow-hidden;
+  }
+
+  .section-label {
+    @apply text-[10px] uppercase text-accent mb-4 block tracking-[0.2em] font-sans font-medium;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-4 text-text-dim text-sm tracking-wider uppercase transition-colors duration-300 cursor-pointer hover:text-text-main;
+  }
+
+  .nav-item.active {
+    @apply text-text-main font-semibold;
+  }
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.8s ease forwards;
+}
+
+/* Hide scrollbar but keep functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

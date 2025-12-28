@@ -1,0 +1,32 @@
+name: ncert-solver
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cpuonly # Change to cudatoolkit if GPU is available
+  - pip:
+      - langchain
+      - langchain-community
+      - langchain-huggingface
+      - pinecone-client
+      - langchain-pinecone
+      - python-dotenv
+      - easyocr
+      - pymupdf
+      - fastapi
+      - uvicorn
+      - sentence-transformers
+      - pandas
+      - numpy
+      - pydantic
+      - python-multipart
+      - langdetect
+      - evaluate
+      - datasets
+      - accelerate
+      - transformers
