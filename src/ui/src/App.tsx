@@ -13,12 +13,15 @@ import {
     Beaker,
     History,
     Languages,
-    ArrowRight
+    ArrowRight,
+    Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { logProgress, getStudentOverview, getRecentActivity } from './lib/firebase';
+import { logProgress, getStudentOverview, getRecentActivity, auth, logoutUser } from './lib/firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import AuthScreen from './components/AuthScreen';
 
 /** Utility for Tailwind class merging */
 function cn(...inputs: ClassValue[]) {
@@ -87,21 +90,23 @@ const Sidebar = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTab:
     );
 };
 
-const Dashboard = () => {
+const Dashboard = ({ studentId }: { studentId: string }) => {
     const [stats, setStats] = useState<any>(null);
     const [recentActivity, setRecentActivity] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
-            const overview = await getStudentOverview();
-            const activity = await getRecentActivity(3);
+            if (!studentId) return;
+            setLoading(true);
+            const overview = await getStudentOverview(studentId);
+            const activity = await getRecentActivity(studentId, 3);
             setStats(overview);
             setRecentActivity(activity);
             setLoading(false);
         };
         fetchDashboardData();
-    }, []);
+    }, [studentId]);
 
     const readiness = stats?.readiness || 65;
     const progressLabel = readiness > 80 ? "Excellent" : (readiness > 60 ? "On Track" : "Needs Review");
@@ -228,7 +233,7 @@ type Message = {
     lang?: string;
 };
 
-const Solver = ({ activeChapter, clearChapter }: { activeChapter: any | null, clearChapter: () => void }) => {
+const Solver = ({ activeChapter, clearChapter, studentId }: { activeChapter: any | null, clearChapter: () => void, studentId: string }) => {
     const [messages, setMessages] = useState<Message[]>([
         {
             role: 'bot', content: activeChapter
@@ -273,7 +278,7 @@ const Solver = ({ activeChapter, clearChapter }: { activeChapter: any | null, cl
             const data = await response.json();
 
             // Log doubt to Firebase
-            logProgress('doubt_asked', {
+            logProgress(studentId, 'doubt_asked', {
                 query: input,
                 chapter: activeChapter?.title || 'General',
                 subject: activeChapter?.subject || 'General'
@@ -379,7 +384,26 @@ const Solver = ({ activeChapter, clearChapter }: { activeChapter: any | null, cl
     );
 };
 
-const Library = ({ onSelectChapter }: { onSelectChapter: (chapter: any) => void }) => {
+const GradeSelector = ({ current, onChange }: { current: number, onChange: (grade: number) => void }) => (
+    <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 w-fit">
+        {[5, 6, 7, 8, 9, 10].map(grade => (
+            <button
+                key={grade}
+                onClick={() => onChange(grade)}
+                className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300",
+                    current === grade
+                        ? "bg-accent text-white shadow-lg shadow-accent/20"
+                        : "text-text-dim hover:text-white"
+                )}
+            >
+                Class {grade}
+            </button>
+        ))}
+    </div>
+);
+
+const Library = ({ onSelectChapter, selectedGrade, setSelectedGrade }: { onSelectChapter: (chapter: any) => void, selectedGrade: number, setSelectedGrade: (grade: number) => void }) => {
     const [libraryData, setLibraryData] = useState<{ subject: string, chapters: any[] }[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -416,15 +440,25 @@ const Library = ({ onSelectChapter }: { onSelectChapter: (chapter: any) => void 
         return 'from-gray-800 to-gray-900';
     };
 
+    const filteredData = libraryData
+        .map(group => ({
+            ...group,
+            chapters: group.chapters.filter(c => parseInt(c.grade) === selectedGrade)
+        }))
+        .filter(group => group.chapters.length > 0);
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-12 pb-20"
         >
-            <header>
-                <span className="section-label">NCERT Archives</span>
-                <h1 className="text-6xl font-serif leading-tight">Academic <br />Knowledge.</h1>
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+                <div>
+                    <span className="section-label">NCERT Archives</span>
+                    <h1 className="text-6xl font-serif leading-tight">Academic <br />Knowledge.</h1>
+                </div>
+                <GradeSelector current={selectedGrade} onChange={setSelectedGrade} />
             </header>
 
             {loading ? (
@@ -435,52 +469,55 @@ const Library = ({ onSelectChapter }: { onSelectChapter: (chapter: any) => void 
                 </div>
             ) : (
                 <div className="space-y-16">
-                    {libraryData.map((subjectGroup, sidx) => (
-                        <section key={sidx} className="space-y-8">
-                            <h3 className="text-2xl font-serif border-b border-white/5 pb-4 flex items-center gap-3">
-                                {subjectGroup.subject}
-                                <span className="text-xs font-sans text-text-dim uppercase tracking-widest mt-1">
-                                    ({subjectGroup.chapters.length} Chapters)
-                                </span>
-                            </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                                {subjectGroup.chapters.map((chapter) => {
-                                    const Icon = getSubjectIcon(subjectGroup.subject);
-                                    const gradient = getSubjectGradient(subjectGroup.subject);
-                                    return (
-                                        <motion.div
-                                            whileHover={{ y: -10 }}
-                                            key={chapter.id}
-                                            className="group cursor-pointer"
-                                            onClick={() => onSelectChapter({ ...chapter, subject: subjectGroup.subject })}
-                                        >
-                                            <div className="aspect-[2/3] relative rounded-lg overflow-hidden border border-white/10 mb-4 bg-card transition-all duration-500 group-hover:border-accent/50 group-hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)]">
-                                                <div className={cn("absolute inset-0 bg-gradient-to-br opacity-40 group-hover:opacity-100 transition-opacity", gradient)} />
-                                                <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
-                                                    <Icon className="absolute w-24 h-24 text-white/5 group-hover:scale-110 transition-transform duration-500" />
-                                                    <h4 className="text-lg font-serif text-white relative z-10 line-clamp-4 leading-snug">
-                                                        {chapter.title}
-                                                    </h4>
+                    {filteredData.length > 0 ? (
+                        filteredData.map((subjectGroup, sidx) => (
+                            <section key={sidx} className="space-y-8">
+                                <h3 className="text-2xl font-serif border-b border-white/5 pb-4 flex items-center gap-3">
+                                    {subjectGroup.subject}
+                                    <span className="text-xs font-sans text-text-dim uppercase tracking-widest mt-1">
+                                        ({subjectGroup.chapters.length} Chapters)
+                                    </span>
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                                    {subjectGroup.chapters.map((chapter) => {
+                                        const Icon = getSubjectIcon(subjectGroup.subject);
+                                        const gradient = getSubjectGradient(subjectGroup.subject);
+                                        return (
+                                            <motion.div
+                                                whileHover={{ y: -10 }}
+                                                key={chapter.id}
+                                                className="group cursor-pointer"
+                                                onClick={() => onSelectChapter({ ...chapter, subject: subjectGroup.subject })}
+                                            >
+                                                <div className="aspect-[2/3] relative rounded-lg overflow-hidden border border-white/10 mb-4 bg-card transition-all duration-500 group-hover:border-accent/50 group-hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)]">
+                                                    <div className={cn("absolute inset-0 bg-gradient-to-br opacity-40 group-hover:opacity-100 transition-opacity", gradient)} />
+                                                    <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
+                                                        <Icon className="absolute w-24 h-24 text-white/5 group-hover:scale-110 transition-transform duration-500" />
+                                                        <h4 className="text-lg font-serif text-white relative z-10 line-clamp-4 leading-snug">
+                                                            {chapter.title}
+                                                        </h4>
+                                                    </div>
+                                                    <div className="absolute bottom-4 left-6 right-6">
+                                                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/60 mb-1 block">Class {chapter.grade}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="absolute bottom-4 left-6 right-6">
-                                                    <span className="text-[10px] uppercase tracking-[0.2em] text-white/60 mb-1 block">Class {chapter.grade}</span>
+                                                <div className="flex justify-between items-center px-1">
+                                                    <span className="text-[9px] text-text-dim uppercase tracking-widest">{chapter.filename}</span>
+                                                    <ArrowRight className="w-4 h-4 text-text-dim group-hover:translate-x-1 transition-transform" />
                                                 </div>
-                                            </div>
-                                            <div className="flex justify-between items-center px-1">
-                                                <span className="text-[9px] text-text-dim uppercase tracking-widest">{chapter.filename}</span>
-                                                <ArrowRight className="w-4 h-4 text-text-dim group-hover:translate-x-1 transition-transform" />
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </div>
-                        </section>
-                    ))}
-
-                    {libraryData.length === 0 && (
-                        <div className="text-center py-20 text-text-dim">
-                            <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                            <p>No processed chapters found in the archives.</p>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        ))
+                    ) : (
+                        <div className="text-center py-32 premium-card bg-white/[0.02] border-dashed">
+                            <Sparkles className="w-12 h-12 mx-auto mb-6 text-accent/20" />
+                            <h3 className="text-2xl font-serif mb-2">Expanding Class {selectedGrade}</h3>
+                            <p className="text-text-dim max-w-sm mx-auto">
+                                Our collectors are currently indexing Class {selectedGrade} content. Class 10 is fully available for your session.
+                            </p>
                         </div>
                     )}
                 </div>
@@ -489,7 +526,7 @@ const Library = ({ onSelectChapter }: { onSelectChapter: (chapter: any) => void 
     );
 };
 
-const Assessment = () => {
+const Assessment = ({ studentId }: { studentId: string }) => {
     const [loading, setLoading] = useState(false);
     const [assessment, setAssessment] = useState<any>(null);
 
@@ -505,7 +542,7 @@ const Assessment = () => {
             setAssessment(data);
 
             // Log assessment completion to Firebase
-            logProgress('assessment_done', {
+            logProgress(studentId, 'assessment_done', {
                 topic: topic,
                 quizSize: data.quiz?.questions?.length || 0
             });
@@ -603,30 +640,87 @@ const Assessment = () => {
 const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState('home');
     const [activeChapter, setActiveChapter] = useState<any | null>(null);
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [selectedGrade, setSelectedGrade] = useState<number>(10);
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
 
     const handleSelectChapter = (chapter: any) => {
+        if (!user) return;
         setActiveChapter(chapter);
         setActiveTab('solver');
         // Log lesson start to Firebase
-        logProgress('lesson_start', {
+        logProgress(user.uid, 'lesson_start', {
             title: chapter.title,
             filename: chapter.filename,
             subject: chapter.subject
         });
     };
 
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-accent/20 border-t-accent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
     return (
         <div className="flex bg-background min-h-screen text-white font-sans selection:bg-accent/30 selection:text-white">
+            <AnimatePresence>
+                {!user && <AuthScreen />}
+            </AnimatePresence>
+
             <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
             <main className="flex-1 p-12 overflow-y-auto">
                 <AnimatePresence mode="wait">
-                    {activeTab === 'home' && <Dashboard key="home" />}
-                    {activeTab === 'solver' && <Solver key="solver" activeChapter={activeChapter} clearChapter={() => setActiveChapter(null)} />}
-                    {activeTab === 'library' && <Library key="library" onSelectChapter={handleSelectChapter} />}
-                    {activeTab === 'assess' && <Assessment key="assess" />}
+                    {activeTab === 'home' && user && <Dashboard key="home" studentId={user.uid} />}
+                    {activeTab === 'solver' && user && (
+                        <Solver
+                            key="solver"
+                            activeChapter={activeChapter}
+                            clearChapter={() => setActiveChapter(null)}
+                            studentId={user.uid}
+                        />
+                    )}
+                    {activeTab === 'library' && (
+                        <Library
+                            key="library"
+                            onSelectChapter={handleSelectChapter}
+                            selectedGrade={selectedGrade}
+                            setSelectedGrade={setSelectedGrade}
+                        />
+                    )}
+                    {activeTab === 'assess' && user && <Assessment key="assess" studentId={user.uid} />}
                 </AnimatePresence>
             </main>
+
+            {/* Global User Menu / Logout */}
+            {user && (
+                <div className="fixed bottom-8 left-8 z-[60] group">
+                    <button
+                        onClick={() => logoutUser()}
+                        className="bg-white/5 border border-white/10 p-4 rounded-xl text-text-dim hover:text-white hover:bg-white/10 transition-all flex items-center gap-3 backdrop-blur-md"
+                    >
+                        <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-[10px] font-bold text-accent">
+                            {user.email?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                        <div className="text-left">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Student Session</p>
+                            <p className="text-xs truncate max-w-[120px]">{user.email || "Anonymous"}</p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
