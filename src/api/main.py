@@ -35,6 +35,13 @@ class FeedbackRequest(BaseModel):
     rating: int  # 1 for good, 0 for bad
     comments: Optional[str] = None
 
+class MissionRequest(BaseModel):
+    displayName: str
+    readiness: float
+    subjects_mastery: dict
+    recent_activity: List[dict]
+    persona: str
+
 @app.get("/")
 async def root():
     return {"message": "NCERT Solver API is running"}
@@ -130,41 +137,122 @@ async def get_library():
 @app.post("/assessment")
 async def generate_assessment(request: QueryRequest):
     """
-    Generates flashcards and quizzes based on a topic (from RAG context).
+    Generates flashcards and quizzes based on a topic or subject context.
     """
     try:
-        # 1. Retrieve context for the topic
-        docs = pipeline.vector_store.search(request.query, k=5, filter={"filename": request.filename} if request.filename else None)
+        # 1. Determine Namespace for retrieval
+        namespace = None
+        if request.subject and request.grade:
+            namespace = f"{request.subject}_{request.grade}".replace(" ", "_")
+        
+        # 2. Retrieve context
+        filters = {"filename": request.filename} if request.filename else None
+        docs = pipeline.vector_store.search(request.query, namespace=namespace, k=8, filter=filters)
+        
         if not docs:
-            raise HTTPException(status_code=404, detail="No content found for this topic to generate assessment.")
+            # Fallback: if no specific query matches, just get general subject context
+            docs = pipeline.vector_store.search(request.subject or "NCERT", namespace=namespace, k=8, filter=filters)
+            
+        if not docs:
+            raise HTTPException(status_code=404, detail="No content found to generate assessment.")
             
         context = "\n---\n".join([doc.page_content for doc in docs])
         
-        # 2. Generate Flashcards/Quiz (Simple prompt for now)
-        prompt = f"""Based on the following NCERT context, generate 3 flashcards (Question/Answer) and 1 multiple choice question (Question, 4 Options, Correct Answer).
-Output format: JSON with 'flashcards' and 'quiz' keys.
+        # 3. Generate structured assessment
+        prompt = f"""You are an educational assessment expert for NCERT curriculum. 
+Using the context below, generate high-quality study materials for a student.
 
 Context:
 {context}
+
+Output strictly in JSON format with the following structure:
+{{
+  "topic": "The main topic name",
+  "flashcards": [
+    {{"q": "Question/Term", "a": "Concise answer/definition"}},
+    ... (at least 4)
+  ],
+  "quiz": [
+    {{
+      "q": "Multiple choice question",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct": "Exact string of the correct option"
+    }},
+    ... (at least 3)
+  ]
+}}
+
+Ensure questions are diverse and cover key concepts from the context.
 """
         raw_response = pipeline.llm.generate(prompt)
-        # In a real scenario, we'd parse this JSON. For now, returning a mock structure 
-        # that mimics what the LLM should produce.
-        return {
-            "topic": request.query,
-            "flashcards": [
-                {"q": f"What is the main idea of {request.query}?", "a": "As per NCERT, it is..."},
-                {"q": "How does it impact students?", "a": "It helps in understanding..."},
-                {"q": "Key term associated?", "a": "Found in Chapter 4."}
-            ],
-            "quiz": {
-                "q": f"According to the text, which of these is true about {request.query}?",
-                "options": ["Option A", "Option B", "Option C", "Option D"],
-                "correct": "Option A"
-            }
-        }
+        
+        # Clean response if LLM adds markdown blocks
+        clean_json = raw_response.strip()
+        if clean_json.startswith("```json"):
+            clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+        elif clean_json.startswith("```"):
+            clean_json = clean_json.split("```")[1].split("```")[0].strip()
+            
+        return json.loads(clean_json)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Assessment generation error: {e}")
+        # Return a fallback structure if parsing fails
+        return {
+            "topic": request.subject or "Study Session",
+            "flashcards": [
+                {"q": "Error generating flashcards", "a": "Please try a more specific topic."}
+            ],
+            "quiz": []
+        }
+@app.post("/mission")
+async def generate_mission(request: MissionRequest):
+    """
+    Analyzes student data via LLM to generate a personalized daily mission.
+    """
+    try:
+        # Construct the context for the LLM
+        stats_context = f"""
+        Student: {request.displayName}
+        Persona: {request.persona}
+        Current Readiness: {request.readiness}%
+        Subject Mastery: {json.dumps(request.subjects_mastery)}
+        Recent Activity: {json.dumps(request.recent_activity[:3])}
+        """
+
+        prompt = f"""You are an expert academic coach. Based on the student stats below, generate ONE high-impact 'Daily Mission' to help them improve.
+        
+        {stats_context}
+        
+        Requirements:
+        1. Be specific (mention a subject or concept based on their low mastery).
+        2. Be encouraging but direct.
+        3. Output strictly in JSON format:
+        {{
+          "mission_title": "Short catchy title",
+          "description": "Specific action to take",
+          "target_subject": "Science/Math/etc",
+          "reward_points": 50
+        }}
+        """
+        
+        raw_response = pipeline.llm.generate(prompt)
+        
+        # Clean response
+        clean_json = raw_response.strip()
+        if clean_json.startswith("```json"):
+            clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+        elif clean_json.startswith("```"):
+            clean_json = clean_json.split("```")[1].split("```")[0].strip()
+            
+        return json.loads(clean_json)
+    except Exception as e:
+        print(f"Mission generation error: {e}")
+        return {
+            "mission_title": "Concept Deep Dive",
+            "description": "Re-examine your last studied chapter to solidify understanding.",
+            "target_subject": "General",
+            "reward_points": 20
+        }
 
 if __name__ == "__main__":
     import uvicorn

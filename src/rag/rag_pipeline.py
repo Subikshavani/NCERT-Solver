@@ -6,16 +6,22 @@ class RAGPipeline:
     def __init__(self):
         self.vector_store = VectorStoreManager()
         
-        # Priority: Gemini -> Local
-        google_api_key = os.getenv("GOOGLE_API_KEY")
-        if google_api_key:
-            print("Using Gemini API for LLM generation.")
-            from src.rag.gemini_llm import GeminiLLM
-            self.llm = GeminiLLM()
+        # Priority: Ollama -> Gemini -> Local
+        ollama_model = os.getenv("OLLAMA_MODEL")
+        if ollama_model:
+            print(f"Using Ollama ({ollama_model}) for LLM generation.")
+            from src.rag.ollama_llm import OllamaLLM
+            self.llm = OllamaLLM(model_name=ollama_model)
         else:
-            print("GOOGLE_API_KEY not found. Falling back to local OpenVINO LLM.")
-            from src.rag.local_llm import LocalLLM
-            self.llm = LocalLLM()
+            google_api_key = os.getenv("GOOGLE_API_KEY")
+            if google_api_key:
+                print("Using Gemini API for LLM generation.")
+                from src.rag.gemini_llm import GeminiLLM
+                self.llm = GeminiLLM()
+            else:
+                print("GOOGLE_API_KEY not found. Falling back to local OpenVINO LLM.")
+                from src.rag.local_llm import LocalLLM
+                self.llm = LocalLLM()
         
     def generate_response(self, query, grade=None, subject=None, filename=None):
         """
