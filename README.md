@@ -1,148 +1,102 @@
-# 🎓 NCERT AI Solver: Intelligent Study Companion
+# 🎓 NCERT AI Solver: The Intelligence-Native Mastery Platform
 
-An advanced, premium-styled academic assistant powered by **Google Gemini 1.5 Pro** and a **Retrieval-Augmented Generation (RAG)** pipeline. This project transforms passive reading into an interactive, data-driven learning experience for students across India.
+An advanced, premium-styled academic assistant powered by **Ollama (Qwen 2.5/3)** and a **Retrieval-Augmented Generation (RAG)** pipeline. This project transforms passive reading into an interactive, AI-driven learning experience powered by a local intelligence layer.
 
-![NCERT AI Banner](https://img.shields.io/badge/Status-Beta-accent)
+![NCERT AI Banner](https://img.shields.io/badge/Status-Mastery--Phase-accent)
 ![Vite](https://img.shields.io/badge/Vite-5.2-blue)
 ![React](https://img.shields.io/badge/React-18-blue)
-![Tailwind](https://img.shields.io/badge/Tailwind-v4-blue)
+![Ollama](https://img.shields.io/badge/LLM-Qwen--2.5/3-purple)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green)
 ![Firebase](https://img.shields.io/badge/Firebase-Auth-orange)
 
 ---
 
-## 🌟 Why This Project? (The Requirement)
+## 🌟 The Evolution: From "Solver" to "Coach"
 
-In the current education landscape, students often face a **"Doubt Gap"**—the time between encountering a complex concept in a textbook and receiving a clear explanation. While NCERT textbooks are foundational for millions, they can be dense. Students in remote areas or those without access to 24/7 private tutoring often struggle to bridge this gap alone.
-
-**NCERT AI Solver** was built to provide every student with a 1-on-1, high-fidelity tutor that knows their textbook inside out.
+The **NCERT AI Solver** has evolved. While it started as a tool to answer textbook questions, it is now an **Academic Coach**. It doesn't just clear doubts; it analyzes your learning patterns to set daily missions, tracks your commitment, and visualizes your path to mastery.
 
 ---
 
-## 🔍 The Cause & Root Problem
+## 💡 The "Intelligence Layer" Architecture
 
-Digital education has historically suffered from three major flaws:
-1. **Generic Intelligence**: Standard AI often gives "hallucinated" or out-of-syllabus answers that don't align with the specific NCERT curriculum.
-2. **Passive Consumption**: Reading PDFs is static; students cannot "ask" a textbook for clarification.
-3. **Lack of Personalization**: Most platforms don't track *what* a student is struggling with, making it hard to identify weak areas until the exam day.
-
----
-
-## 💡 The Solution: AI-Driven Contextual Learning
-
-Our system addresses these roots by integrating three core pillars:
-- **RAG Architecture**: We don't just use AI; we feed the AI the *exact* NCERT PDF content. This ensures answers are 100% accurate, syllabus-aligned, and include page citations.
-- **Multilingual Support**: Education shouldn't be barred by language. Our solver understands and responds in major Indian regional languages.
-- **Personalized Feedback Loop**: Integrated with **Firebase Authentication**, we log every doubt asked and lesson started to build a real-time "Readiness Score" for the student.
-
----
-
-## 🚀 Key Benefits
-
-- **Instant Clarity**: No more waiting for the next class; get doubts cleared at midnight.
-- **Syllabus Accuracy**: Every response is grounded in the NCERT text, preventing confusion from generic web searches.
-- **Data-Driven Confidence**: The Bento-style Dashboard shows students exactly where they stand in their learning journey.
-- **Accessibility**: A premium, high-end UI designed for focus, making study time feel modern and engaging.
-
----
-
-## 🏗️ System Architecture
-
-Our architecture is designed for **deterministic accuracy**. Unlike standard AI that relies on memory, NCERT AI uses a "Closed-Book with Reference" approach (RAG).
+Our architecture is now **LLM-Native**, using a sophisticated agentic loop to personalize every interaction.
 
 ```mermaid
 graph TD
-    A[PDF Textbooks] -->|Data Ingestion| B(Data Ingestor)
-    B -->|Metadata Extraction| C[JSON Processed Store]
-    D[User Query] -->|Context Retrieval| E{RAG Pipeline}
-    C -->|Semantic Search| E
-    E -->|Augmented Prompt| F[Gemini 1.5 Pro]
-    F -->|Cited Response| G[React UI]
-    H[User Identity] -->|Auth| I[Firebase]
-    G -->|Activity Log| I
+    A[NCERT Digital Library] -->|RAG Retrieval| B(AI Solver)
+    C[User Engagement Data] -->|Real-time Feed| D{AI Intelligence Layer}
+    D -->|Ollama / Qwen| E[Daily AI Missions]
+    D -->|Weighted Logic| F[Readiness Score]
+    E -->|Interactive Task| G[Student Dashboard]
+    F -->|Visual Progress| G
+    B -->|Citations| G
+    G -->|Activity Log| H[Firebase Firestore]
+    H -->|Feedback Loop| D
 ```
 
-### 🛠️ The RAG Flow (Step-by-Step)
-
-1.  **Ingestion Phase**: Textbooks are parsed and chunked. Each chunk is tagged with `grade`, `subject`, and `filename`.
-2.  **Retrieval Phase**: When you ask a doubt about "Photosynthesis", the system searches the *Class 10 Science* JSON files for the most relevant paragraphs.
-3.  **Augmentation Phase**: We don't just send your question to Gemini. We send: *"Using ONLY this text from NCERT Class 10 Science, answer the user: [Context Snippet]"*.
-4.  **Generation Phase**: Gemini generates a response that is strictly grounded in the textbook.
-
 ---
 
-## ⚖️ Side-by-Side Comparison
+## ✨ Premium Features
 
-| Feature | Standard LLM (Generic) | NCERT AI Solver (RAG) |
-| :--- | :--- | :--- |
-| **Source of Truth** | Training Data (Internal) | Actual NCERT Textbook (External) |
-| **Accuracy** | Prone to Hallucinations | 100% Syllabus Aligned |
-| **Citations** | None (Trust me bro) | Specific Chapter & Page References |
-| **Example Query** | *"Explain rusting"* | *"Explain rusting as per Class 10 Science"* |
-| **Result** | Explains it generally. | Explains the exact chemical reaction and experiment mentioned on Page 34. |
+### 🎯 **The Daily AI Mission**
+Using **Ollama (Qwen)**, the app analyzes your subject mastery scores every morning. If your Science score is low, the AI creates a dedicated mission: *"Mission: Master Thermodynamics"* with real XP rewards.
 
----
+### 🧠 **Intelligent Readiness Score**
+A transparent, multi-dimensional metric that calculates your exam readiness based on:
+- **Foundational Mastery** (Base 60%)
+- **Lesson Completion** (+5% per module)
+- **Active Engagement** (+1% per doubt solved)
+- **Diagnostic Validation** (+2% per quiz score)
 
-## ✨ Features
+### ✅ **Diagnostic Hub (Assess)**
+Move beyond just reading. Generate instant:
+- **AI Flashcards**: For rapid-fire revision of complex terms.
+- **Interactive Quizzes**: Multiple-choice assessments generated directly from textbook context with instant scoring.
 
-### 🧠 Intelligent Doubt Solver
-- **Contextual Learning**: Select a chapter to focus the AI's intelligence solely on that lesson.
-- **Dynamic Citations**: AI responses include direct references to textbook chapters.
-- **Multilingual AI**: Fluently handles queries in English, Hindi, and beyond.
-
-### 📚 Digital Archives (Library)
-- **Multi-Grade Support**: Selection for Classes 5-10 with a sleek, interactive UI.
-- **Automatic Ingestion**: High-precision PDF processing for instant availability.
-
-### 📊 Real-time Dashboard
-- **student Mastery**: Tracks "Overall Readiness" using Firebase progress logs.
-- **Activity Feed**: Real-time history of your learning milestones.
+### 🏠 **Personalized Home Hub**
+- **Study Personas**: Identify as an *Architect*, *Sprinter*, or *Analyst* with custom UI branding.
+- **Radial Commitment Tracker**: Visualize your daily study minutes against your set goals.
+- **Subject Mastery Grid**: High-fidelity cards with glowing progress bars and descriptive icons for every subject.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 18, Vite, Framer Motion (Animations), Tailwind CSS v4.
-- **Backend**: FastAPI (Python), LangChain (RAG Pipeline).
-- **Intelligence**: Google Gemini Pro 1.5.
-- **Infrastructure**: Firebase (Auth & Firestore Analytics).
+- **Frontend**: React 18 (Vite), Framer Motion (High-Fidelity Animations), Tailwind CSS v4.
+- **Backend**: FastAPI (Python), LangChain (Agentic Orchestration).
+- **Primary Intelligence**: Ollama (Local LLM: Qwen 2.5 / Qwen 3).
+- **Fallback Intelligence**: Google Gemini 1.5 Pro.
+- **Storage/Auth**: Firebase Firestore & Authentication.
+- **Vector Engine**: Semantic Indexing for NCERT textbooks.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Setup & Launch
 
-### 1. Backend Setup
+### 1. Requirements
+- **Ollama** installed and running (`ollama serve`).
+- **Python 3.10+** and **Node.js 18+**.
+
+### 2. Backend Orchestration
 ```bash
 git clone https://github.com/yourusername/ncert-solver.git
 cd ncert-solver
 pip install -r requirements.txt
-cp .env.example .env # Add your GOOGLE_API_KEY
+cp .env.example .env 
+# Set OLLAMA_MODEL=qwen2.5 (or preferred model)
 python src/api/main.py
 ```
 
-### 2. Frontend Setup
+### 3. Frontend Experience
 ```bash
 cd src/ui
 npm install
-cp .env.example .env.local # Add Firebase Credentials
 npm run dev
 ```
 
 ---
 
-## 📁 Project Structure
+## 📜 Project Vision
+To bridge the "Doubt Gap" in Indian education by providing every student—regardless of location—with an elite, AI-driven study partner that understands the NCERT curriculum as perfectly as a teacher, but with the 24/7 availability of an app.
 
-```text
-├── src/
-│   ├── api/          # FastAPI Backend Endpoints
-│   ├── rag/          # Gemini RAG Pipeline logic
-│   ├── ingestion/    # PDF Processing Engine
-│   └── ui/           # React + Tailwind Dashboard
-├── data/
-│   ├── raw/          # Original Textbook PDFs
-│   └── processed/    # Context-ready JSON extracts
-└── database/         # Local vector store (FAISS/Chroma)
-```
-
-## 📜 License
-Educational Project. All NCERT contents are properties of NCERT India.
+*Educational Project. All NCERT contents are properties of NCERT India.*
