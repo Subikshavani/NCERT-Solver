@@ -19,20 +19,65 @@ class RAGPipeline:
                 from src.rag.gemini_llm import GeminiLLM
                 self.llm = GeminiLLM()
             else:
-                print("GOOGLE_API_KEY not found. Falling back to local OpenVINO LLM.")
-                from src.rag.local_llm import LocalLLM
-                self.llm = LocalLLM()
+                print("GOOGLE_API_KEY not found. Attempting to use local OpenVINO LLM.")
+                try:
+                    from src.rag.local_llm import LocalLLM
+                    self.llm = LocalLLM()
+                except Exception as e:
+                    print(f"Local LLM not available: {e}")
+                    # Fallback lightweight LLM: extracts 4-line answer in requested language
+                    class SimpleLLM:
+                        def generate(self, prompt, language='en'):
+                            # Extract 4-line answer and optionally translate
+                            try:
+                                # Extract context after 'Context:'
+                                parts = prompt.split('Context:')
+                                if len(parts) > 1:
+                                    ctx = parts[1]
+                                else:
+                                    ctx = prompt
+                                
+                                # Collect non-empty sentences
+                                sentences = []
+                                for line in ctx.split('\n'):
+                                    s = line.strip()
+                                    if s and len(s) > 15 and not s.startswith('---'):
+                                        sentences.append(s)
+                                
+                                # Return first 4 sentences
+                                if sentences:
+                                    answer = ' '.join(sentences[:4])
+                                    if len(answer) > 400:
+                                        answer = answer[:400].rsplit(' ', 1)[0] + '.'
+                                    
+                                    # Attempt translation if language is not English
+                                    if language and language != 'en':
+                                        try:
+                                            from translate import Translator
+                                            translator = Translator(from_lang='en', to_lang=language)
+                                            answer = translator.translate(answer)
+                                        except Exception as e:
+                                            # If translation fails, return English with note
+                                            answer = answer + "\n[Note: Response in " + language + " unavailable. English provided above.]"
+                                    
+                                    return answer
+                            except Exception:
+                                pass
+                            return "I don't have information about that in my NCERT knowledge base."
+
+                    self.llm = SimpleLLM()
         
-    def generate_response(self, query, grade=None, subject=None, filename=None):
+    def generate_response(self, query, grade=None, subject=None, filename=None, language=None):
         """
         Full RAG flow: Retrieve -> Augment -> Generate
         """
-        # 1. Detection & Filtering
-        try:
-            lang = langdetect.detect(query)
-        except:
-            lang = "en"
-            
+        # 1. Language preference (use provided language or auto-detect)
+        if not language:
+            try:
+                language = langdetect.detect(query)
+            except:
+                language = "en"
+        
         filters = {}
         if filename:
             filters["filename"] = filename
@@ -55,11 +100,11 @@ class RAGPipeline:
         context = "\n---\n".join([doc.page_content for doc in docs])
         
         # 3. Augmentation (Prompt Engineering)
-        prompt = self._build_prompt(query, context, lang)
+        prompt = self._build_prompt(query, context, language)
         
         # 4. Generation
         print("Brain is thinking (Generating response)...")
-        response_text = self.llm.generate(prompt)
+        response_text = self.llm.generate(prompt, language=language)
         print("Response generated.")
         
         # 5. Citations
@@ -75,7 +120,7 @@ class RAGPipeline:
         return {
             "answer": response_text,
             "citations": citations,
-            "detected_language": lang
+            "response_language": language
         }
 
     def _build_prompt(self, query, context, lang):

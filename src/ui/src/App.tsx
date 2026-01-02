@@ -102,7 +102,7 @@ const Sidebar = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTab:
     );
 };
 
-const Dashboard = ({ studentId, profile, onSelectChapter }: { studentId: string, profile: any, onSelectChapter: (chapter: any) => void }) => {
+const Dashboard = ({ studentId, profile, onSelectChapter, onOpenAssessment }: { studentId: string, profile: any, onSelectChapter: (chapter: any) => void, onOpenAssessment: (subject: string) => void }) => {
     const [stats, setStats] = useState<any>(null);
     const [recentActivity, setRecentActivity] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -124,7 +124,7 @@ const Dashboard = ({ studentId, profile, onSelectChapter }: { studentId: string,
                     subjMastery[s] = Math.floor(((studentId.charCodeAt(idx % studentId.length) % 40) + 40));
                 });
 
-                const res = await fetch('http://localhost:8000/mission', {
+                const res = await fetch('http://localhost:8001/mission', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -351,7 +351,7 @@ const Dashboard = ({ studentId, profile, onSelectChapter }: { studentId: string,
                         const Icon = subjectIcons[subj] || Sparkles;
                         const subjectProgress = Math.floor(((studentId.charCodeAt(idx % studentId.length) % 40) + 40));
                         return (
-                            <div key={idx} className="premium-card flex flex-col gap-4 group hover:border-accent/40 transition-all">
+                            <div key={idx} className="premium-card flex flex-col gap-4 group hover:border-accent/40 transition-all cursor-pointer" onClick={() => onOpenAssessment(subj)}>
                                 <div className="flex justify-between items-start">
                                     <div className="p-2 bg-white/5 rounded-lg group-hover:bg-accent/10 group-hover:text-accent transition-colors">
                                         <Icon className="w-4 h-4" />
@@ -413,12 +413,18 @@ const Solver = ({ activeChapter, setActiveChapter, clearChapter, studentId, libr
     libraryData: any[],
     selectedGrade: number
 }) => {
-    const [selectedSubject, setSelectedSubject] = useState<string | null>(activeChapter?.subject || null);
+    const [selectedSubject, setSelectedSubject] = useState<string | null>(
+        activeChapter?.isSubjectWide ? activeChapter.subject : (activeChapter?.subject || null)
+    );
+    const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
     const [messages, setMessages] = useState<Message[]>([
         {
-            role: 'bot', content: activeChapter
-                ? `Hello! I'm ready to help you with ${activeChapter.title}. What would you like to know about this lesson?`
-                : "Hello! I'm your NCERT assistant. Please select a subject to start a focused study session.",
+            role: 'bot', 
+            content: activeChapter?.isSubjectWide 
+                ? `Subject Mode: ${activeChapter.subject}. I'm searching across all chapters in this subject. Ask me anything!`
+                : (activeChapter 
+                    ? `Focus Mode: ${activeChapter.title}. How can I assist you with this specific chapter?`
+                    : "Hello! I'm your NCERT assistant. Please select a subject to start a focused study session."),
             citations: []
         }
     ]);
@@ -426,15 +432,35 @@ const Solver = ({ activeChapter, setActiveChapter, clearChapter, studentId, libr
     const [isLoading, setIsLoading] = useState(false);
     const [isChapterSelectionOpen, setIsChapterSelectionOpen] = useState(false);
 
+    // Language options
+    const languages = [
+        { code: 'en', label: 'English' },
+        { code: 'hi', label: 'हिंदी (Hindi)' },
+        { code: 'ta', label: 'தமிழ் (Tamil)' },
+        { code: 'te', label: 'తెలుగు (Telugu)' },
+        { code: 'ka', label: 'ಕನ್ನಡ (Kannada)' },
+        { code: 'ml', label: 'മലയാളം (Malayalam)' }
+    ];
+
     // Reset when activeChapter changes or when selectedSubject is cleared
     useEffect(() => {
         if (activeChapter) {
-            setMessages([{
-                role: 'bot',
-                content: `Focus Mode: ${activeChapter.title}. How can I assist you with this specific chapter?`,
-                citations: []
-            } as Message]);
-            setSelectedSubject(activeChapter.subject);
+            // Check if this is a subject-wide click (no specific chapter focus)
+            if (activeChapter.isSubjectWide) {
+                setSelectedSubject(activeChapter.subject);
+                setMessages([{
+                    role: 'bot',
+                    content: `Subject Mode: ${activeChapter.subject}. I'm searching across all chapters in this subject. Ask me anything!`,
+                    citations: []
+                } as Message]);
+            } else {
+                setSelectedSubject(activeChapter.subject);
+                setMessages([{
+                    role: 'bot',
+                    content: `Focus Mode: ${activeChapter.title}. How can I assist you with this specific chapter?`,
+                    citations: []
+                } as Message]);
+            }
             setIsChapterSelectionOpen(false);
         } else if (selectedSubject) {
             setMessages([{
@@ -449,7 +475,7 @@ const Solver = ({ activeChapter, setActiveChapter, clearChapter, studentId, libr
                 citations: []
             } as Message]);
         }
-    }, [activeChapter, selectedSubject]);
+    }, [activeChapter]);
 
     const handleSend = async () => {
         if (!input || isLoading) return;
@@ -460,14 +486,15 @@ const Solver = ({ activeChapter, setActiveChapter, clearChapter, studentId, libr
         setIsLoading(true);
 
         try {
-            const response = await fetch('http://localhost:8000/chat', {
+                    const response = await fetch('http://localhost:8001/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     query: input,
                     filename: activeChapter?.filename,
                     subject: selectedSubject,
-                    grade: String(selectedGrade)
+                    grade: String(selectedGrade),
+                    language: selectedLanguage
                 })
             });
             const data = await response.json();
@@ -476,14 +503,15 @@ const Solver = ({ activeChapter, setActiveChapter, clearChapter, studentId, libr
             logProgress(studentId, 'doubt_asked', {
                 query: input,
                 chapter: activeChapter?.title || 'General',
-                subject: activeChapter?.subject || 'General'
+                subject: activeChapter?.subject || 'General',
+                language: selectedLanguage
             });
 
             setMessages(prev => [...prev, {
                 role: 'bot',
                 content: data.answer,
                 citations: data.citations || [],
-                lang: data.detected_language
+                lang: data.response_language
             } as Message]);
         } catch (e) {
             setMessages(prev => [...prev, { role: 'bot', content: "Connection interrupted. Please verify that the local intelligence engine is active.", citations: [] } as Message]);
@@ -648,6 +676,20 @@ const Solver = ({ activeChapter, setActiveChapter, clearChapter, studentId, libr
             </div>
 
             <div className="mt-8 pt-8 border-t border-white/5">
+                <div className="mb-6 flex items-center gap-4">
+                    <label className="text-sm text-text-dim font-medium">Response Language:</label>
+                    <select
+                        value={selectedLanguage}
+                        onChange={(e) => setSelectedLanguage(e.target.value)}
+                        className="bg-card border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent transition-colors"
+                    >
+                        {languages.map(lang => (
+                            <option key={lang.code} value={lang.code}>
+                                {lang.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
                 <div className="relative group">
                     <input
                         className="w-full bg-transparent border-b border-white/20 pb-4 text-xl font-light focus:outline-none focus:border-accent transition-colors placeholder:text-white/10"
@@ -689,11 +731,15 @@ const GradeSelector = ({ current, onChange }: { current: number, onChange: (grad
     </div>
 );
 
-const Library = ({ onSelectChapter, selectedGrade, setSelectedGrade, libraryData }: {
+const Library = ({ onSelectChapter, selectedGrade, setSelectedGrade, libraryData, setActiveTab, setActiveChapter, setAssessSubject, setAssessChapter }: {
     onSelectChapter: (chapter: any) => void,
     selectedGrade: number,
     setSelectedGrade: (grade: number) => void,
-    libraryData: any[]
+    libraryData: any[],
+    setActiveTab: (tab: string) => void,
+    setActiveChapter: (chapter: any) => void,
+    setAssessSubject: (s: string | null) => void,
+    setAssessChapter: (c: any | null) => void
 }) => {
     const loading = libraryData.length === 0;
 
@@ -747,14 +793,44 @@ const Library = ({ onSelectChapter, selectedGrade, setSelectedGrade, libraryData
                     {filteredData.length > 0 ? (
                         filteredData.map((subjectGroup, sidx) => (
                             <section key={sidx} className="space-y-8">
-                                <h3 className="text-2xl font-serif border-b border-white/5 pb-4 flex items-center gap-3">
-                                    {subjectGroup.subject}
-                                    <span className="text-xs font-sans text-text-dim uppercase tracking-widest mt-1">
-                                        ({subjectGroup.chapters.length} Chapters)
-                                    </span>
-                                </h3>
+                                <div className="flex items-center justify-between w-full">
+                                    <button
+                                        onClick={() => {
+                                            // When a subject is clicked, switch to solver and set subject-wide mode.
+                                            const firstChapter = subjectGroup.chapters[0];
+                                            if (firstChapter && firstChapter.grade) {
+                                                setSelectedGrade(parseInt(firstChapter.grade));
+                                            }
+                                            setActiveTab('solver');
+                                            // Set selected subject in solver without a specific chapter
+                                            setActiveChapter({ ...firstChapter, subject: subjectGroup.subject, isSubjectWide: true });
+                                        }}
+                                        className="w-full text-left group hover:text-accent transition-colors"
+                                    >
+                                    <h3 className="text-2xl font-serif border-b border-white/5 pb-4 flex items-center gap-3 group-hover:border-accent/30 transition-colors">
+                                        {subjectGroup.subject}
+                                        <span className="text-xs font-sans text-text-dim uppercase tracking-widest mt-1 group-hover:text-accent/60">
+                                            ({subjectGroup.chapters.length} Chapters) • Click to Explore
+                                        </span>
+                                    </h3>
+                                    </button>
+                                    <div className="ml-4">
+                                        <button
+                                            onClick={() => {
+                                                const firstChapter = subjectGroup.chapters[0] || null;
+                                                if (firstChapter && firstChapter.grade) setSelectedGrade(parseInt(firstChapter.grade));
+                                                setAssessSubject(subjectGroup.subject);
+                                                setAssessChapter(firstChapter ? { ...firstChapter } : null);
+                                                setActiveTab('assess');
+                                            }}
+                                            className="px-3 py-2 text-[10px] border border-white/10 rounded-lg hover:bg-white/5"
+                                        >
+                                            Assess
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                                    {subjectGroup.chapters.map((chapter) => {
+                                    {subjectGroup.chapters.map((chapter: any) => {
                                         const Icon = getSubjectIcon(subjectGroup.subject);
                                         const gradient = getSubjectGradient(subjectGroup.subject);
                                         return (
@@ -801,10 +877,12 @@ const Library = ({ onSelectChapter, selectedGrade, setSelectedGrade, libraryData
     );
 };
 
-const Assessment = ({ studentId, libraryData, selectedGrade }: {
+const Assessment = ({ studentId, libraryData, selectedGrade, selectedSubjectProp, selectedChapterProp }: {
     studentId: string,
     libraryData: any[],
-    selectedGrade: number
+    selectedGrade: number,
+    selectedSubjectProp?: string | null,
+    selectedChapterProp?: any | null
 }) => {
     const [loading, setLoading] = useState(false);
     const [assessment, setAssessment] = useState<any>(null);
@@ -817,7 +895,7 @@ const Assessment = ({ studentId, libraryData, selectedGrade }: {
     const generateAssessment = async (topic?: string) => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/assessment', {
+            const response = await fetch('http://localhost:8001/assessment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -861,6 +939,16 @@ const Assessment = ({ studentId, libraryData, selectedGrade }: {
         .filter((group: any) => group.chapters.length > 0);
 
     const currentSubjectChapters = (libraryData as any[]).find(s => s.subject === selectedSubject)?.chapters.filter((c: any) => parseInt(c.grade) === selectedGrade) || [];
+
+    // Sync external props into internal state so other views can open assessments
+    useEffect(() => {
+        if (selectedSubjectProp) {
+            setSelectedSubject(selectedSubjectProp);
+        }
+        if (selectedChapterProp) {
+            setSelectedChapter(selectedChapterProp);
+        }
+    }, [selectedSubjectProp, selectedChapterProp]);
 
     if (!selectedSubject) {
         return (
@@ -1027,45 +1115,80 @@ const Assessment = ({ studentId, libraryData, selectedGrade }: {
 // --- Main App ---
 
 const App: React.FC = () => {
-    const [activeTab, setActiveTab] = useState('home');
-    const [activeChapter, setActiveChapter] = useState<any | null>(null);
-    const [user, setUser] = useState<User | null>(null);
-    const [profile, setProfile] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [selectedGrade, setSelectedGrade] = useState<number>(10);
-    const [libraryData, setLibraryData] = useState<{ subject: string, chapters: any[] }[]>([]);
+    try {
+        const [activeTab, setActiveTab] = useState('home');
+        const [activeChapter, setActiveChapter] = useState<any | null>(null);
+        const [user, setUser] = useState<User | null>(null);
+        const [profile, setProfile] = useState<any>(null);
+        const [loading, setLoading] = useState(true);
+        const [selectedGrade, setSelectedGrade] = useState<number>(10);
+        const [libraryData, setLibraryData] = useState<{ subject: string, chapters: any[] }[]>([]);
+        const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
-    useEffect(() => {
-        const fetchLibrary = async () => {
-            try {
-                const response = await fetch('http://localhost:8000/library');
-                const data = await response.json();
-                setLibraryData(data.subjects || []);
-            } catch (e) {
-                console.error("Failed to fetch library:", e);
-            }
-        };
-        fetchLibrary();
-    }, []);
+        // Shared assessment state so other views can open diagnostics
+        const [assessSelectedSubject, setAssessSelectedSubject] = useState<string | null>(null);
+        const [assessSelectedChapter, setAssessSelectedChapter] = useState<any | null>(null);
 
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
-            if (currentUser) {
-                const data = await getStudentOverview(currentUser.uid);
-                // If the user document exists but is missing critical profile info
-                if (data && data.profileCompleted === undefined && !data.displayName) {
-                    data.profileCompleted = false;
+        const pushLog = (msg: string) => setDebugLogs(prev => [...prev.slice(-98), `${new Date().toLocaleTimeString()} ${msg}`]);
+
+        useEffect(() => {
+            const fetchLibrary = async () => {
+                try {
+                    const response = await fetch('http://localhost:8001/library');
+                    const data = await response.json();
+                    setLibraryData(data.subjects || []);
+                    pushLog('Fetched library');
+                } catch (e) {
+                    console.error("Failed to fetch library:", e);
+                    pushLog('Failed to fetch library: ' + (e instanceof Error ? e.message : String(e)));
                 }
-                setProfile(data);
-                if (data?.grade) setSelectedGrade(data.grade);
-            } else {
-                setProfile(null);
-            }
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+            };
+            fetchLibrary();
+        }, []);
+
+        useEffect(() => {
+            // Capture console logs and errors so they are visible on-page for debugging
+            const origLog = console.log.bind(console);
+            const origError = console.error.bind(console);
+            console.log = (...args: any[]) => {
+                origLog(...args);
+                try { pushLog('[log] ' + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')); } catch { }
+            };
+            console.error = (...args: any[]) => {
+                origError(...args);
+                try { pushLog('[error] ' + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')); } catch { }
+            };
+
+            const onWindowError = (ev: ErrorEvent) => {
+                const msg = ev.error?.message || ev.message || 'Unknown error';
+                pushLog(`[uncaught] ${msg} at ${ev.filename}:${ev.lineno}:${ev.colno}`);
+            };
+            window.addEventListener('error', onWindowError);
+
+            const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+                console.log('Auth state changed:', currentUser?.uid);
+                setUser(currentUser);
+                if (currentUser) {
+                    const data = await getStudentOverview(currentUser.uid);
+                    // If the user document exists but is missing critical profile info
+                    if (data && data.profileCompleted === undefined && !data.displayName) {
+                        data.profileCompleted = false;
+                    }
+                    setProfile(data);
+                    if (data?.grade) setSelectedGrade(data.grade);
+                } else {
+                    setProfile(null);
+                }
+                setLoading(false);
+            });
+
+            return () => {
+                console.log = origLog;
+                console.error = origError;
+                window.removeEventListener('error', onWindowError);
+                unsubscribe();
+            };
+        }, []);
 
     const handleSelectChapter = (chapter: any) => {
         if (!user) return;
@@ -1095,111 +1218,159 @@ const App: React.FC = () => {
 
     const rank = getRank(profile?.readiness || 65);
 
-    return (
-        <div className="flex bg-background min-h-screen text-white font-sans selection:bg-accent/30 selection:text-white">
-            <AnimatePresence>
-                {!user && <AuthScreen />}
-                {user && (!profile || profile.profileCompleted === false) && (
-                    <OnboardingScreen
-                        userId={user.uid}
-                        onComplete={(newProfile) => setProfile({ ...profile, ...newProfile, profileCompleted: true })}
-                    />
-                )}
-            </AnimatePresence>
-
-            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-
-            <main className="flex-1 p-12 overflow-y-auto">
-                <AnimatePresence mode="wait">
-                    {activeTab === 'home' && user && (
-                        <Dashboard
-                            key="home"
-                            studentId={user.uid}
-                            profile={profile}
-                            onSelectChapter={handleSelectChapter}
-                        />
-                    )}
-                    {activeTab === 'solver' && user && (
-                        <Solver
-                            key="solver"
-                            activeChapter={activeChapter}
-                            setActiveChapter={setActiveChapter}
-                            clearChapter={() => setActiveChapter(null)}
-                            studentId={user.uid}
-                            libraryData={libraryData}
-                            selectedGrade={selectedGrade}
-                        />
-                    )}
-                    {activeTab === 'library' && (
-                        <Library
-                            key="library"
-                            onSelectChapter={handleSelectChapter}
-                            selectedGrade={selectedGrade}
-                            setSelectedGrade={setSelectedGrade}
-                            libraryData={libraryData}
-                        />
-                    )}
-                    {activeTab === 'assess' && user && (
-                        <Assessment
-                            key="assess"
-                            studentId={user.uid}
-                            libraryData={libraryData}
-                            selectedGrade={selectedGrade}
-                        />
-                    )}
-                    {activeTab === 'settings' && user && (
-                        <ProfileSettings
-                            key="settings"
-                            userId={user.uid}
-                            initialProfile={profile}
-                            onUpdate={(newProfile) => setProfile({ ...profile, ...newProfile })}
-                            onBack={() => setActiveTab('home')}
-                        />
-                    )}
-                </AnimatePresence>
-            </main>
-
-            {/* Global User Menu / Profile Card */}
-            {user && (
-                <div className="fixed bottom-8 left-8 z-[60] group">
-                    <button
-                        onClick={() => logoutUser()}
-                        className="bg-white/5 border border-white/10 p-5 rounded-[2rem] text-text-dim hover:text-white hover:bg-white/10 transition-all flex items-center gap-4 backdrop-blur-3xl shadow-2xl group-hover:border-accent/30"
-                    >
-                        <div className="relative">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent/20 to-indigo-500/10 flex items-center justify-center text-lg font-bold text-accent border border-white/10 group-hover:scale-105 transition-transform">
-                                {profile?.displayName?.trim() ? profile.displayName.charAt(0).toUpperCase() : (user.email?.charAt(0).toUpperCase() || "S")}
-                            </div>
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-4 border-background" />
-                        </div>
-
-                        <div className="text-left">
-                            <div className="flex items-center gap-2 mb-0.5">
-                                <p className="text-xs font-bold text-white truncate max-w-[140px]">
-                                    {profile?.displayName || "New Student"}
-                                </p>
-                                <span className={cn("text-[8px] px-1.5 py-0.5 rounded-full bg-white/5 font-bold uppercase tracking-tighter border border-white/5", rank.color)}>
-                                    {rank.name}
-                                </span>
-                            </div>
-                            <p className="text-[10px] font-medium tracking-wide text-white/30 uppercase">
-                                {profile?.studyPersona || 'Unset'} • {profile?.academicBoard || 'Unset'}
-                            </p>
-                        </div>
-
-                        <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-accent ml-2" />
-                    </button>
-
-                    {/* Tooltip on hover */}
-                    <div className="absolute bottom-full left-0 mb-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none translate-y-2 group-hover:translate-y-0 transition-transform">
-                        <div className="premium-card p-3 text-[10px] whitespace-nowrap bg-background/90 backdrop-blur-xl border-accent/20">
-                            Click to Sign Out
-                        </div>
-                    </div>
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="text-center space-y-4">
+                    <div className="w-8 h-8 border-2 border-accent/20 border-t-accent rounded-full animate-spin mx-auto" />
+                    <p className="text-text-dim text-sm">Loading NCERT AI...</p>
                 </div>
-            )}
-        </div>
-    );
+            </div>
+        );
+    }
+
+        return (
+            <div className="flex bg-background min-h-screen text-white font-sans selection:bg-accent/30 selection:text-white">
+                {!user ? (
+                    <AuthScreen />
+                ) : (
+                    <>
+                        <AnimatePresence>
+                            {(!profile || profile.profileCompleted === false) && (
+                                <OnboardingScreen
+                                    userId={user.uid}
+                                    onComplete={(newProfile) => setProfile({ ...profile, ...newProfile, profileCompleted: true })}
+                                />
+                            )}
+                        </AnimatePresence>
+
+                        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+
+                        <main className="flex-1 p-12 overflow-y-auto">
+                            <AnimatePresence mode="wait">
+                                {activeTab === 'home' && (
+                                    <Dashboard
+                                        key="home"
+                                        studentId={user.uid}
+                                        profile={profile}
+                                        onSelectChapter={handleSelectChapter}
+                                        onOpenAssessment={(subj: string) => { setAssessSelectedSubject(subj); setAssessSelectedChapter(null); setActiveTab('assess'); }}
+                                    />
+                                )}
+                                {activeTab === 'solver' && (
+                                    <Solver
+                                        key="solver"
+                                        activeChapter={activeChapter}
+                                        setActiveChapter={setActiveChapter}
+                                        clearChapter={() => setActiveChapter(null)}
+                                        studentId={user.uid}
+                                        libraryData={libraryData}
+                                        selectedGrade={selectedGrade}
+                                    />
+                                )}
+                                {activeTab === 'library' && (
+                                    <Library
+                                        key="library"
+                                        onSelectChapter={handleSelectChapter}
+                                        selectedGrade={selectedGrade}
+                                        setSelectedGrade={setSelectedGrade}
+                                        libraryData={libraryData}
+                                        setActiveTab={setActiveTab}
+                                        setActiveChapter={setActiveChapter}
+                                        setAssessSubject={setAssessSelectedSubject}
+                                        setAssessChapter={setAssessSelectedChapter}
+                                    />
+                                )}
+                                {activeTab === 'assess' && (
+                                    <Assessment
+                                        key="assess"
+                                        studentId={user.uid}
+                                        libraryData={libraryData}
+                                        selectedGrade={selectedGrade}
+                                        selectedSubjectProp={assessSelectedSubject}
+                                        selectedChapterProp={assessSelectedChapter}
+                                    />
+                                )}
+                                {activeTab === 'settings' && (
+                                    <ProfileSettings
+                                        key="settings"
+                                        userId={user.uid}
+                                        initialProfile={profile}
+                                        onUpdate={(newProfile) => setProfile({ ...profile, ...newProfile })}
+                                        onBack={() => setActiveTab('home')}
+                                    />
+                                )}
+                            </AnimatePresence>
+                        </main>
+
+                        {/* Global User Menu / Profile Card */}
+                        <div className="fixed bottom-8 left-8 z-[60] group">
+                            <button
+                                onClick={() => logoutUser()}
+                                className="bg-white/5 border border-white/10 p-5 rounded-[2rem] text-text-dim hover:text-white hover:bg-white/10 transition-all flex items-center gap-4 backdrop-blur-3xl shadow-2xl group-hover:border-accent/30"
+                            >
+                                <div className="relative">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent/20 to-indigo-500/10 flex items-center justify-center text-lg font-bold text-accent border border-white/10 group-hover:scale-105 transition-transform">
+                                        {profile?.displayName?.trim() ? profile.displayName.charAt(0).toUpperCase() : (user.email?.charAt(0).toUpperCase() || "S")}
+                                    </div>
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-4 border-background" />
+                                </div>
+
+                                <div className="text-left">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <p className="text-xs font-bold text-white truncate max-w-[140px]">
+                                            {profile?.displayName || "New Student"}
+                                        </p>
+                                        <span className={cn("text-[8px] px-1.5 py-0.5 rounded-full bg-white/5 font-bold uppercase tracking-tighter border border-white/5", rank.color)}>
+                                            {rank.name}
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] font-medium tracking-wide text-white/30 uppercase">
+                                        {profile?.studyPersona || 'Unset'} • {profile?.academicBoard || 'Unset'}
+                                    </p>
+                                </div>
+
+                                <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-accent ml-2" />
+                            </button>
+
+                            {/* Tooltip on hover */}
+                            <div className="absolute bottom-full left-0 mb-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none translate-y-2 group-hover:translate-y-0 transition-transform">
+                                <div className="premium-card p-3 text-[10px] whitespace-nowrap bg-background/90 backdrop-blur-xl border-accent/20">
+                                    Click to Sign Out
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
+                {debugLogs && debugLogs.length > 0 && (
+                    <div className="fixed bottom-4 right-4 z-[999] w-80 max-h-56 overflow-auto bg-black/70 text-xs p-2 rounded border border-white/10">
+                        <div className="flex items-center justify-between mb-1">
+                            <strong>Debug</strong>
+                            <button onClick={() => setDebugLogs([])} className="text-[10px] text-text-dim">Clear</button>
+                        </div>
+                        <ul className="space-y-1">
+                            {debugLogs.slice().reverse().map((l, i) => (
+                                <li key={i} className={l.startsWith('[error]') || l.startsWith('[uncaught]') ? 'text-pink-400' : 'text-white/80'}>
+                                    {l}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
+        );
+    } catch (error) {
+        console.error('App Error:', error);
+        return (
+            <div style={{ minHeight: '100vh', backgroundColor: '#050505', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
+                <div style={{ textAlign: 'center' }}>
+                    <h1 style={{ fontSize: '24px', marginBottom: '16px' }}>Application Error</h1>
+                    <p style={{ color: '#888', marginBottom: '16px' }}>{error instanceof Error ? error.message : 'Unknown error'}</p>
+                    <p style={{ color: '#666', fontSize: '12px' }}>Check browser console (Ctrl+Shift+K) for details</p>
+                </div>
+            </div>
+        );
+    }
 };
 
 export default App;

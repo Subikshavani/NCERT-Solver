@@ -1,12 +1,47 @@
 import os
 import json
-from pinecone import Pinecone, ServerlessSpec
-from langchain_pinecone import PineconeVectorStore
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
-
 from dotenv import load_dotenv
+
+# Optional imports — allow running without Pinecone or LangChain installed
+try:
+    from pinecone import Pinecone, ServerlessSpec
+except Exception:
+    Pinecone = None
+    ServerlessSpec = None
+
+try:
+    from langchain_pinecone import PineconeVectorStore
+except Exception:
+    PineconeVectorStore = None
+
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+except Exception:
+    HuggingFaceEmbeddings = None
+
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except Exception:
+    RecursiveCharacterTextSplitter = None
+
+try:
+    from langchain_core.documents import Document
+except Exception:
+    class Document:
+        def __init__(self, page_content, metadata=None):
+            self.page_content = page_content
+            self.metadata = metadata or {}
+
+# Provide a lightweight fallback text splitter when langchain splitter is unavailable
+if RecursiveCharacterTextSplitter is None:
+    class RecursiveCharacterTextSplitter:
+        def __init__(self, chunk_size=1000, chunk_overlap=100, separators=None):
+            self.chunk_size = chunk_size
+            self.chunk_overlap = chunk_overlap
+
+        def split_documents(self, documents):
+            # Naive fallback: return documents as-is (no extra splitting)
+            return documents
 
 class VectorStoreManager:
     def __init__(self, index_name=None, embedding_model="paraphrase-multilingual-MiniLM-L12-v2"):
@@ -15,10 +50,17 @@ class VectorStoreManager:
         self.index_name = index_name or os.getenv("PINECONE_INDEX_NAME") or "ncert-all"
         self.api_key = os.getenv("PINECONE_API_KEY")
         if not self.api_key:
-            raise ValueError("PINECONE_API_KEY environment variable is not set")
-        
-        self.pc = Pinecone(api_key=self.api_key)
-        self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model)
+            print("Warning: PINECONE_API_KEY not set — falling back to local search (no Pinecone).")
+            self.pc = None
+        else:
+            self.pc = Pinecone(api_key=self.api_key)
+
+        # Embeddings are still available for potential local use; keep initialization lightweight
+        try:
+            self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model)
+        except Exception as e:
+            print(f"Warning initializing embeddings: {e}")
+            self.embeddings = None
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=100,
@@ -114,44 +156,80 @@ class VectorStoreManager:
         """
         Search for relevant chunks. If namespace is None, search across all available namespaces.
         """
-        if namespace:
-            self.vector_db = PineconeVectorStore(
-                index_name=self.index_name,
-                embedding=self.embeddings,
-                namespace=namespace
-            )
-            return self.vector_db.similarity_search(query, k=k, filter=filter)
-        else:
-            # Global search across all namespaces
-            print("  Starting global search across all namespaces...")
+        # If Pinecone is configured, use it (namespace-specific or global)
+        if self.pc:
+            if namespace:
+                self.vector_db = PineconeVectorStore(
+                    index_name=self.index_name,
+                    embedding=self.embeddings,
+                    namespace=namespace
+                )
+                return self.vector_db.similarity_search(query, k=k, filter=filter)
+            else:
+                # Global search across all namespaces
+                print("  Starting global search across all namespaces...")
+                try:
+                    index = self.pc.Index(self.index_name)
+                    stats = index.describe_index_stats()
+                    namespaces = list(stats.namespaces.keys())
+                    print(f"  Found namespaces: {namespaces}")
+                    
+                    all_results = []
+                    for ns in namespaces:
+                        print(f"    Searching namespace: {ns}...")
+                        vdb = PineconeVectorStore(
+                            index_name=self.index_name,
+                            embedding=self.embeddings,
+                            namespace=ns
+                        )
+                        # We get slightly more results per namespace to re-rank
+                        results = vdb.similarity_search_with_score(query, k=k, filter=filter)
+                        print(f"    Found {len(results)} results in {ns}")
+                        for doc, score in results:
+                            all_results.append((doc, score))
+                    
+                    # Sort by score descending and take top k
+                    all_results.sort(key=lambda x: x[1], reverse=True)
+                    print(f"  Global search finished. Total candidates: {len(all_results)}")
+                    return [doc for doc, score in all_results[:k]]
+                    
+                except Exception as e:
+                    print(f"Error in global search: {e}")
+                    return []
+
+        # Fallback: simple local search using processed JSON files
+        print("Pinecone unavailable — using local fallback search in data/processed")
+        processed_dir = "data/processed"
+        candidates = []
+        if not os.path.exists(processed_dir):
+            return []
+
+        q_tokens = set(query.lower().split())
+        for file in os.listdir(processed_dir):
+            if not file.endswith('.json'):
+                continue
             try:
-                index = self.pc.Index(self.index_name)
-                stats = index.describe_index_stats()
-                namespaces = list(stats.namespaces.keys())
-                print(f"  Found namespaces: {namespaces}")
-                
-                all_results = []
-                for ns in namespaces:
-                    print(f"    Searching namespace: {ns}...")
-                    vdb = PineconeVectorStore(
-                        index_name=self.index_name,
-                        embedding=self.embeddings,
-                        namespace=ns
-                    )
-                    # We get slightly more results per namespace to re-rank
-                    results = vdb.similarity_search_with_score(query, k=k, filter=filter)
-                    print(f"    Found {len(results)} results in {ns}")
-                    for doc, score in results:
-                        all_results.append((doc, score))
-                
-                # Sort by score descending and take top k
-                all_results.sort(key=lambda x: x[1], reverse=True)
-                print(f"  Global search finished. Total candidates: {len(all_results)}")
-                return [doc for doc, score in all_results[:k]]
-                
+                with open(os.path.join(processed_dir, file), 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    metadata = data.get('metadata', {})
+                    for page in data.get('pages', []):
+                        content = page.get('content', '')
+                        score = sum(1 for t in q_tokens if t in content.lower())
+                        if score > 0:
+                            # Create a lightweight Document-like object
+                            class Doc:
+                                def __init__(self, content, meta):
+                                    self.page_content = content
+                                    self.metadata = meta
+                            meta = metadata.copy()
+                            meta['page'] = page.get('page_number')
+                            candidates.append((Doc(content, meta), score))
             except Exception as e:
-                print(f"Error in global search: {e}")
-                return []
+                print(f"Error reading processed file {file}: {e}")
+
+        # sort by score desc and return top k
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return [doc for doc, s in candidates[:k]]
 
 if __name__ == "__main__":
     pass

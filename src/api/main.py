@@ -2,8 +2,6 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-from src.rag.rag_pipeline import RAGPipeline
-from src.ingestion.ingest_books import DataIngestor
 import os
 import shutil
 import json
@@ -18,9 +16,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Pipeline (Note: This might be heavy for startup)
-pipeline = RAGPipeline()
-ingestor = DataIngestor()
+# Lazy load heavy modules only when needed
+pipeline = None
+ingestor = None
+
+def get_pipeline():
+    global pipeline
+    if pipeline is None:
+        from src.rag.rag_pipeline import RAGPipeline
+        pipeline = RAGPipeline()
+    return pipeline
+
+def get_ingestor():
+    global ingestor
+    if ingestor is None:
+        from src.ingestion.ingest_books import DataIngestor
+        ingestor = DataIngestor()
+    return ingestor
 
 class QueryRequest(BaseModel):
     query: str
@@ -28,6 +40,7 @@ class QueryRequest(BaseModel):
     subject: Optional[str] = None
     filename: Optional[str] = None
     conversation_id: Optional[str] = None
+    language: Optional[str] = "en"  # Language preference: en, hi, ta, te, ka, ml, etc.
 
 class FeedbackRequest(BaseModel):
     query: str
@@ -49,11 +62,13 @@ async def root():
 @app.post("/chat")
 async def chat(request: QueryRequest):
     try:
-        response = pipeline.generate_response(
+        pipe = get_pipeline()
+        response = pipe.generate_response(
             query=request.query,
             grade=request.grade,
             subject=request.subject,
-            filename=request.filename
+            filename=request.filename,
+            language=request.language
         )
         return response
     except Exception as e:
@@ -75,7 +90,8 @@ async def upload_document(
     
     # Trigger ingestion
     try:
-        ingestor.ingest_file(file_path)
+        ing = get_ingestor()
+        ing.ingest_file(file_path)
         return {"status": "success", "message": f"File {file.filename} uploaded and indexed."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
@@ -91,47 +107,92 @@ async def feedback(request: FeedbackRequest):
 @app.get("/library")
 async def get_library():
     """
-    Returns a list of all processed chapters/books using their PDF filenames as titles.
+    Dynamically scan data/classX directories for PDFs and return library structure.
+    Organizes by subject and grade.
     """
-    processed_dir = "data/processed"
-    if not os.path.exists(processed_dir):
+    library = {}
+    data_dir = "data"
+    
+    if not os.path.exists(data_dir):
         return {"subjects": []}
     
-    library = {}
+    # Map directory names to subject names
+    subject_mapping = {
+        "English": "English",
+        "english": "English",
+        "EVS": "Science",
+        "evs": "Science",
+        "Science": "Science",
+        "science": "Science",
+        "Maths": "Mathematics",
+        "maths": "Mathematics",
+        "Mathematics": "Mathematics",
+        "mathematics": "Mathematics",
+        "Hindi": "Hindi",
+        "hindi": "Hindi",
+        "Social": "Social Science",
+        "social": "Social Science",
+        "History": "Social Science",
+        "history": "Social Science",
+        "Geography": "Social Science",
+        "geography": "Social Science"
+    }
     
-    for filename in os.listdir(processed_dir):
-        if filename.endswith(".json"):
-            file_path = os.path.join(processed_dir, filename)
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+    # Scan classX directories
+    for class_dir in sorted(os.listdir(data_dir)):
+        class_path = os.path.join(data_dir, class_dir)
+        if not os.path.isdir(class_path) or not class_dir.startswith("class"):
+            continue
+        
+        try:
+            grade = class_dir.replace("class", "")
+            
+            # Scan subject subdirectories
+            for subject_dir in os.listdir(class_path):
+                subject_path = os.path.join(class_path, subject_dir)
+                if not os.path.isdir(subject_path):
+                    continue
                 
-                metadata = data.get("metadata", {})
-                subject = metadata.get("subject", "General")
-                grade = metadata.get("grade", "10")
+                # Map folder name to standardized subject
+                subject = subject_mapping.get(subject_dir, subject_dir)
                 
-                # Use the original PDF filename from metadata as the title
-                title = metadata.get("filename", filename)
+                # Recursively scan for PDF files in subject directory (handles extra subfolders)
+                for root, _, files in os.walk(subject_path):
+                    for pdf_file in files:
+                        if pdf_file.lower().endswith(".pdf"):
+                            # Determine subject label: prefer deeper folder name if present (e.g., class5/english/maths)
+                            if os.path.abspath(root) != os.path.abspath(subject_path):
+                                subfolder = os.path.basename(root)
+                                subj_label = subject_mapping.get(subfolder, subfolder)
+                            else:
+                                subj_label = subject
 
-                if subject not in library:
-                    library[subject] = []
-                
-                library[subject].append({
-                    "id": filename,
-                    "title": title,
-                    "grade": grade,
-                    "filename": metadata.get("filename")
-                })
-            except Exception as e:
-                print(f"Error processing {filename}: {e}")
-                
+                            if subj_label not in library:
+                                library[subj_label] = []
+
+                            # Create chapter entry. Use relative path under class folder to make id unique
+                            rel_dir = os.path.relpath(root, class_path).replace("\\", "_")
+                            id_part = f"{class_dir}_{subject_dir}_{rel_dir}_{pdf_file}" if rel_dir not in (".", "") else f"{class_dir}_{subject_dir}_{pdf_file}"
+                            title = os.path.splitext(pdf_file)[0].replace("_", " ").title()
+                            library[subj_label].append({
+                                "id": id_part,
+                                "title": title,
+                                "grade": grade,
+                                "filename": pdf_file,
+                                "subject": subj_label,
+                                "path": os.path.join(root, pdf_file)
+                            })
+        except Exception as e:
+            print(f"Error processing {class_dir}: {e}")
+    
+    # Convert to formatted output
     formatted_library = []
-    for subject, chapters in library.items():
+    for subject in sorted(library.keys()):
         formatted_library.append({
             "subject": subject,
-            "chapters": chapters
+            "chapters": sorted(library[subject], key=lambda x: (x["grade"], x["title"]))
         })
-        
+    
     return {"subjects": formatted_library}
 
 @app.post("/assessment")
@@ -140,6 +201,7 @@ async def generate_assessment(request: QueryRequest):
     Generates flashcards and quizzes based on a topic or subject context.
     """
     try:
+        pipe = get_pipeline()
         # 1. Determine Namespace for retrieval
         namespace = None
         if request.subject and request.grade:
@@ -147,11 +209,11 @@ async def generate_assessment(request: QueryRequest):
         
         # 2. Retrieve context
         filters = {"filename": request.filename} if request.filename else None
-        docs = pipeline.vector_store.search(request.query, namespace=namespace, k=8, filter=filters)
+        docs = pipe.vector_store.search(request.query, namespace=namespace, k=8, filter=filters)
         
         if not docs:
             # Fallback: if no specific query matches, just get general subject context
-            docs = pipeline.vector_store.search(request.subject or "NCERT", namespace=namespace, k=8, filter=filters)
+            docs = pipe.vector_store.search(request.subject or "NCERT", namespace=namespace, k=8, filter=filters)
             
         if not docs:
             raise HTTPException(status_code=404, detail="No content found to generate assessment.")
@@ -184,7 +246,7 @@ Output strictly in JSON format with the following structure:
 
 Ensure questions are diverse and cover key concepts from the context.
 """
-        raw_response = pipeline.llm.generate(prompt)
+        raw_response = pipe.llm.generate(prompt)
         
         # Clean response if LLM adds markdown blocks
         clean_json = raw_response.strip()
@@ -210,6 +272,7 @@ async def generate_mission(request: MissionRequest):
     Analyzes student data via LLM to generate a personalized daily mission.
     """
     try:
+        pipe = get_pipeline()
         # Construct the context for the LLM
         stats_context = f"""
         Student: {request.displayName}
@@ -235,7 +298,7 @@ async def generate_mission(request: MissionRequest):
         }}
         """
         
-        raw_response = pipeline.llm.generate(prompt)
+        raw_response = pipe.llm.generate(prompt)
         
         # Clean response
         clean_json = raw_response.strip()
