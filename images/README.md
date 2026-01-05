@@ -118,7 +118,7 @@ Distributed under the MIT License. See LICENSE.txt for details.
 [back to top](#table-of-contents)
 
 ## Contact
-Your Name — your.email@example.com — [Project Link](https://github.com/Subikshavani/NCERT-Solver)
+Your Name — subiksha1742005@gmail.com — [Project Link](https://github.com/Subikshavani/NCERT-Solver)
 
 [back to top](#table-of-contents)
 
