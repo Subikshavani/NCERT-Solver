@@ -51,7 +51,7 @@ Python 3.10+
 Node.js 18+
 
 Backend
-git clone https://github.com/yourusername/ncert-solver.git
+git clone https://github.com/Subikshavani/ncert-solver.git
 cd ncert-solver
 pip install -r requirements.txt
 cp .env.example .env
