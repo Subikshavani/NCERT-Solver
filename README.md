@@ -1,73 +1,137 @@
-🎓 NCERT AI Solver: The Intelligence-Native Mastery Platform
-An advanced, premium-styled academic assistant powered by Ollama (Qwen 2.5/3) and a Retrieval-Augmented Generation (RAG) pipeline. This project transforms passive reading into an interactive, AI-driven learning experience powered by a local intelligence layer.
+# NCERT AI Solver
 
-🌟 The Evolution: From "Solver" to "Coach"
-The NCERT AI Solver has evolved from a tool to answer textbook questions into an Academic Coach. It doesn't just clear doubts; it analyzes your learning patterns to set daily missions, tracks your commitment, and visualizes your path to mastery.
+A premium-styled, AI-powered academic coach for NCERT learners. Built with a Retrieval-Augmented Generation (RAG) pipeline, FastAPI, and a modern React frontend to turn passive reading into interactive mastery.
 
-💡 The "Intelligence Layer" Architecture
-The architecture is LLM-Native, using a sophisticated agentic loop to personalize every interaction:
+## Table of Contents
+- [About The Project](#about-the-project)
+- [Built With](#built-with)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [Usage](#usage)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
+- [Acknowledgments](#acknowledgments)
 
-NCERT Digital Library → RAG Retrieval → AI Solver
-User Engagement Data → Real-time Feed → AI Intelligence Layer (Ollama/Qwen)
-                      ↓                    ↓
-                 Daily AI Missions    Readiness Score
-                      ↓                    ↓
-                 Student Dashboard ← Citations + Visual Progress
-                      ↓
-                 Firebase Firestore (Feedback Loop)
-                 
-✨ Premium Features
-🎯 The Daily AI Mission
-Using Ollama (Qwen), the app analyzes subject mastery scores and creates dedicated missions with XP rewards.
+## About The Project
+![Product Screenshot](images/screenshot.png)
 
-🧠 Intelligent Readiness Score
-Multi-dimensional metric calculating exam readiness based on:
+NCERT AI Solver evolves from a simple Q&A bot into a personalized academic coach. It retrieves NCERT textbook context, plans daily AI missions, tracks readiness scores, and surfaces citations so learners get trustworthy, adaptive guidance.
 
-Foundational Mastery (Base 60%)
-Lesson Completion (+5% per module)
-Active Engagement (+1% per doubt solved)
-Diagnostic Validation (+2% per quiz score)
+**Why this template?**
+- Focus on building the product, not rewriting README boilerplate.
+- DRY your documentation workflow with a reusable structure.
+- Clear sections for onboarding contributors and users.
 
-✅ Diagnostic Hub (Assess)
-AI Flashcards for rapid revision
-Interactive Quizzes with instant scoring
+Use the existing structure to start fast, or adjust sections to fit your needs.
 
-🏠 Personalized Home Hub
-Study Personas (Architect, Sprinter, Analyst)
-Radial Commitment Tracker
-Subject Mastery Grid with progress visualization
+[back to top](#table-of-contents)
 
-🛠️ Tech Stack
-Frontend: React 18 (Vite), Framer Motion, Tailwind CSS v4
-Backend: FastAPI (Python), LangChain
-Intelligence: Ollama (Qwen 2.5/3), Google Gemini 1.5 Pro (fallback)
-Storage/Auth: Firebase Firestore & Authentication
-Vector Engine: Semantic indexing for NCERT textbooks
+## Built With
+- FastAPI, Python 3.11+
+- React 18, Vite, Tailwind CSS
+- Framer Motion
+- Ollama (Qwen 2.5/3) + Gemini (fallback)
+- Pinecone (vector search)
+- Firebase Auth/Firestore
 
-🚀 Setup & Launch
-Requirements
-Ollama installed and running
-Python 3.10+
-Node.js 18+
+[back to top](#table-of-contents)
 
-Backend
-git clone https://github.com/Subikshavani/ncert-solver.git
-cd ncert-solver
+## Getting Started
+Follow these steps to run the project locally.
+
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- Ollama running locally with Qwen 2.5/3 models pulled
+- (Optional) Access to Pinecone and Firebase credentials
+
+### Installation
+1) Clone the repo
+```bash
+git clone https://github.com/Subikshavani/NCERT-Solver.git
+cd NCERT-Solver
+```
+2) Backend setup
+```bash
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
-python src/api/main.py
-
-
-Frontend
+copy .env.example .env
+# fill in API keys: Ollama, Pinecone, Firebase, etc.
+```
+3) Frontend setup
+```bash
 cd src/ui
 npm install
+```
+4) Update git remote if you forked
+```bash
+git remote set-url origin <your_fork_url>
+git remote -v
+```
+
+[back to top](#table-of-contents)
+
+## Usage
+1) Start backend
+```bash
+cd NCERT-Solver
+.venv\Scripts\activate
+python src/api/main.py
+```
+2) Start frontend
+```bash
+cd src/ui
 npm run dev
-graph TD
+```
+3) Visit the dev URL shown in the terminal. Log in (Firebase) and start asking NCERT questions or running daily missions.
 
+[back to top](#table-of-contents)
 
+## Roadmap
+- Add changelog automation (Keep a Changelog)
+- Add "back to top" links in UI docs
+- Add additional README templates with examples
+- Add components doc for copy/paste snippets
+- Multi-language support (Hindi, English)
 
-📜 Project Vision
-To bridge the "Doubt Gap" in Indian education by providing every student with an elite, AI-driven study partner that understands 
-the NCERT curriculum with 24/7 availability.
+See open issues for planned features and known issues.
+
+[back to top](#table-of-contents)
+
+## Contributing
+Contributions are welcome!
+1) Fork the project
+2) Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3) Commit changes (`git commit -m "Add some AmazingFeature"`)
+4) Push to your branch (`git push origin feature/AmazingFeature`)
+5) Open a pull request
+
+[back to top](#table-of-contents)
+
+## License
+Distributed under the MIT License. See LICENSE.txt for details.
+
+[back to top](#table-of-contents)
+
+## Contact
+Your Name — your.email@example.com — [Project Link](https://github.com/Subikshavani/NCERT-Solver)
+
+[back to top](#table-of-contents)
+
+## Acknowledgments
+- Choose an Open Source License
+- GitHub Emoji Cheat Sheet
+- Malven's Flexbox Cheatsheet
+- Malven's Grid Cheatsheet
+- Shields.io badges
+- GitHub Pages
+- Font Awesome
+- React Icons
+
+[back to top](#table-of-contents)
 
 
